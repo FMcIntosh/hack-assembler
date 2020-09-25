@@ -1,44 +1,41 @@
 /* eslint-disable react/react-in-jsx-scope */
 import { useState, useEffect } from 'react';
 import { useMachine } from '@xstate/react';
-import Assembler from '../Machines/Assembler';
+import AppMachine from '../Machines/AppMachine';
+import Assembler from '../tabs/Assembler';
+import VMTranslator from '../tabs/VMTranslator';
+import { inspect } from '@xstate/inspect';
+
+// inspect({
+//   url: 'https://statecharts.io/inspect',
+//   iframe: false,
+// });
 
 const Home = () => {
-  const [input, setInput] = useState('');
-  const [message, setMessage] = useState(null);
-  const [state, send] = useMachine(Assembler);
-  const { rawFile, encodedFile } = state.context;
-
-  useEffect(() => {
-    console.log('yoza');
-    const handleMessage = (event, message) => setMessage(message);
-    global.ipcRenderer.on('message', handleMessage);
-
-    return () => {
-      global.ipcRenderer.removeListener('message', handleMessage);
-    };
-  }, []);
-
+  const [state, send] = useMachine(AppMachine, { devTools: true });
+  console.log(state);
   return (
     <div>
-      <button onClick={() => send('OPEN_FILE')}>Open File</button>
-      <button onClick={() => send('ASSEMBE')}>Assemble File</button>
-      <div className='text-content-container'>
-        <pre>{rawFile}</pre>
-        <pre>{encodedFile}</pre>
-      </div>
-
+      <button onClick={() => send('SWITCH_TAB_ASSEMBLER')} style={{ background: state.matches('assembler') && 'blue' }}>
+        Assembler
+      </button>
+      <button
+        onClick={() => {
+          send('SWITCH_TAB_VM_TRANSLATOR');
+          console.log('SWITCH_TAB_VM_TRANSLATOR');
+        }}
+        style={{ background: state.matches('vmTranslator') && 'blue' }}
+      >
+        VM Translator
+      </button>
+      {state.matches('assembler') && <Assembler />}
+      {state.matches('vmTranslator') && <VMTranslator />}
       <style jsx>{`
         h1 {
           color: red;
           font-size: 50px;
         }
-        pre {
-          width: 40%;
-          height: 500px;
-          overflow: auto;
-          border: 1px solid black;
-        }
+
         .text-content-container {
           display: flex;
         }

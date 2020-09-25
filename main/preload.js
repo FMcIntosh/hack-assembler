@@ -9,4 +9,5 @@ process.once('loaded', () => {
   global.ipcRenderer = ipcRenderer;
   global.dialog = dialog;
   global.fs = require('fs');
+  global.path = require('path');
 });
