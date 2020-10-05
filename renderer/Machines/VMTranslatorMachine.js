@@ -1,5 +1,5 @@
 import { Machine, assign } from 'xstate';
-import translateVMInstruction from './translateVMInstruction';
+import { translateVMInstruction, bootstrap } from './translateVMInstruction';
 const fs = global.fs;
 const path = global.path;
 
@@ -108,8 +108,11 @@ export default Machine({
         actions: [
           assign((ctx) => {
             const assembledFileArr = [];
+            assembledFileArr.push(bootstrap());
             const setCurrentFunction = (functionName) => (ctx.currentFunction = functionName);
             ctx.cleanedFileArr.forEach((instruction) => {
+              assembledFileArr.push('// ' + instruction);
+
               const translated = translateVMInstruction(
                 instruction,
                 ctx.filename,

@@ -1,4 +1,4 @@
-export default function translateVMInstruction(instruction, filename, uniqueId, currentFunction, setCurrentFunction) {
+export function translateVMInstruction(instruction, filename, uniqueId, currentFunction, setCurrentFunction) {
   const [command, segment, i] = instruction.split(' ');
   switch (command) {
     // arithmetic
@@ -161,6 +161,7 @@ export default function translateVMInstruction(instruction, filename, uniqueId, 
     }
     case 'if-goto': {
       return `
+      @SP
       M = M - 1
       A = M
       D = M
@@ -170,7 +171,7 @@ export default function translateVMInstruction(instruction, filename, uniqueId, 
     }
     case 'function': {
       setCurrentFunction(segment);
-      const functionAddress = `${filename}.${segment}`;
+      const functionAddress = `$$function.${segment}`;
       let pushNVars = '';
       for (let count = 0; count < i; count++) {
         pushNVars += convertPushConstant(0);
@@ -181,8 +182,8 @@ export default function translateVMInstruction(instruction, filename, uniqueId, 
       `;
     }
     case 'call': {
-      const returnAddress = `${filename}.${segment}$ret.${uniqueId}`;
-      const functionAddress = `${filename}.${segment}`;
+      const returnAddress = `$$function.${segment}$ret.${uniqueId}`;
+      const functionAddress = `$$function.${segment}`;
       // save return address (create label)
       return `
       ${convertPushConstant(returnAddress)}
@@ -389,4 +390,14 @@ function convertPopInstruction(pointer, i) {
   @temp
   A = M
   M = D`;
+}
+
+export function bootstrap() {
+  return `
+  @256
+  D=A
+  @0
+  M=D
+  ${translateVMInstruction('call Sys.init 0', 'any', 'bootstrap')}
+  `;
 }
