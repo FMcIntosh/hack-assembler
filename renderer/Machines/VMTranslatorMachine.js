@@ -1,9 +1,11 @@
-import { Machine, assign } from 'xstate';
+import { Machine, assign, send } from 'xstate';
 import { translateVMInstruction, bootstrap } from './translateVMInstruction';
+import VMFileMachine from './VMFileMachine';
 const fs = global.fs;
 const path = global.path;
 
 export default Machine({
+  id: 'VMTranslator',
   initial: 'init',
   context: {
     rawFile: '',
@@ -11,8 +13,12 @@ export default Machine({
     symbolList: {},
     encodedFile: '',
     filename: '',
-    uniqueCount: 0,
-    currentFunction: '',
+    queue: [],
+    isDir: false,
+  },
+  invoke: {
+    id: 'fileTranslator',
+    src: VMFileMachine,
   },
   states: {
     init: {
@@ -43,100 +49,89 @@ export default Machine({
     idle: {
       on: {
         OPEN_FILE: {
-          target: 'openingFile',
+          target: 'openingFiles',
         },
       },
     },
-    openingFile: {
+    openingFiles: {
       invoke: {
         src: (context, event) => (callback, onReceive) => {
           // dialog to open file
-          const filePaths = global.dialog.showOpenDialogSync({ properties: ['openFile'] });
-          const data = fs.readFileSync(filePaths[0], 'utf8');
+          const filePaths = global.dialog
+            .showOpenDialogSync({ properties: ['openFile', 'multiSelections'] })
+            .filter((path) => path.endsWith('.vm'));
           console.log(filePaths);
           callback({
-            type: 'LOAD_FILE',
-            rawFile: data,
-            filename: path.basename(filePaths[0], path.extname(filePaths[0])),
+            type: 'LOAD_FILE_PATHS',
+            filePaths,
           });
         },
       },
       on: {
-        LOAD_FILE: {
-          target: 'firstPass',
-          actions: [assign({ rawFile: (ctx, event) => event.rawFile, filename: (ctx, event) => event.filename })],
+        LOAD_FILE_PATHS: {
+          target: 'processingFiles',
+          actions: [
+            (ctx, event) => console.log(event),
+            assign({
+              queue: (ctx, event) => event.filePaths,
+              filename: (ctx, event) => event.filename,
+              isDir: (ctx, event) => event.filePaths.length > 1,
+            }),
+          ],
         },
       },
     },
-    fileOpen: {
-      on: {
-        ASSEMBLE: {
-          target: 'firstPass',
+    processingFiles: {
+      initial: 'bootstrap',
+      states: {
+        bootstrap: {
+          always: [
+            {
+              // If its a directory add the bootstrap code
+              target: 'ready',
+              actions: [assign({ encodedFile: bootstrap() })],
+              cond: (ctx) => ctx.isDir,
+            },
+            { target: 'ready' },
+          ],
+        },
+        ready: {
+          entry: [() => console.log('ready')],
+          always: [
+            {
+              target: 'waiting',
+              cond: queueNotEmpty,
+              actions: [send((ctx) => ({ type: 'PROCESS_FILE', filepath: ctx.queue[0] }), { to: 'fileTranslator' })],
+            },
+            { target: '#VMTranslator.finishedProcessing' },
+          ],
+        },
+        waiting: {
+          on: {
+            FINISHED_PROCESSING: {
+              target: 'end',
+              actions: [
+                assign((ctx, event) => (ctx.encodedFile += event.encodedFile)),
+                (ctx, event) => console.log('event', ctx, event),
+              ],
+            },
+          },
+        },
+        end: {
+          always: {
+            target: 'ready',
+            actions: [assign({ queue: (ctx) => ctx.queue.slice(1) })],
+          },
         },
       },
     },
-    firstPass: {
-      // need to do two things:
-      // strip out comments and empty lines
-      // populate
-      always: {
-        target: 'secondPass',
-        actions: [
-          assign((ctx) => {
-            const cleanedFileArr = [];
-            const symbolList = { ...ctx.symbolList };
-            ctx.rawFile.split('\n').forEach((line) => {
-              const trimmed = line.trim().replace(/(\/\*[^*]*\*\/)|(\/\/[^*]*)/g, ''); // remove all comments
-
-              if (trimmed.substring(0, 2) === '//' || trimmed === '') {
-                // do nothing
-                // whitespace / comments
-              } else {
-                cleanedFileArr.push(trimmed);
-              }
-            });
-            console.log(cleanedFileArr);
-            return { ...ctx, cleanedFileArr, symbolList };
-          }),
-        ],
-      },
-    },
-    secondPass: {
-      // Assemble instructions
-      always: {
-        target: 'end',
-        actions: [
-          assign((ctx) => {
-            const assembledFileArr = [];
-            assembledFileArr.push(bootstrap());
-            const setCurrentFunction = (functionName) => (ctx.currentFunction = functionName);
-            ctx.cleanedFileArr.forEach((instruction) => {
-              assembledFileArr.push('// ' + instruction);
-
-              const translated = translateVMInstruction(
-                instruction,
-                ctx.filename,
-                ctx.uniqueCount,
-                ctx.currentFunction,
-                setCurrentFunction
-              );
-              ctx.uniqueCount = ctx.uniqueCount + 1;
-              assembledFileArr.push(translated);
-            });
-            let encodedFile = '';
-            assembledFileArr.forEach((line) => (encodedFile += line + '\n'));
-            return { ...ctx, encodedFile };
-          }),
-        ],
-      },
-    },
-    end: {
+    finishedProcessing: {
       on: {
         SAVE_FILE: {
           target: 'savingFile',
         },
         OPEN_FILE: {
-          target: 'openingFile',
+          target: 'openingFiles',
         },
       },
     },
@@ -168,3 +163,8 @@ export default Machine({
     },
   },
 });
+
+function queueNotEmpty(ctx) {
+  console.log('not', ctx.queue.length > 0);
+  return ctx.queue.length > 0;
+}
