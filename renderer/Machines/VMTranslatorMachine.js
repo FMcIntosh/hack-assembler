@@ -12,7 +12,7 @@ export default Machine({
     cleanedFileArr: [],
     symbolList: {},
     encodedFile: '',
-    filename: '',
+    processedFilename: '',
     queue: [],
     isDir: false,
   },
@@ -55,29 +55,38 @@ export default Machine({
     },
     openingFiles: {
       invoke: {
-        src: (context, event) => (callback, onReceive) => {
+        src: (ctx, event) => (callback, onReceive) => {
           // dialog to open file
           const filePaths = global.dialog
             .showOpenDialogSync({ properties: ['openFile', 'multiSelections'] })
             .filter((path) => path.endsWith('.vm'));
-          console.log(filePaths);
-          callback({
-            type: 'LOAD_FILE_PATHS',
-            filePaths,
-          });
+          console.log(ctx.encodedFile);
+          if (filePaths.length > 0) {
+            callback({
+              type: 'LOAD_FILE_PATHS',
+              filePaths,
+              processedFilename: path.dirname(filePaths[0]),
+            });
+          } else {
+            callback({
+              type: 'NO_FILES',
+            });
+          }
         },
       },
       on: {
         LOAD_FILE_PATHS: {
           target: 'processingFiles',
           actions: [
-            (ctx, event) => console.log(event),
             assign({
               queue: (ctx, event) => event.filePaths,
-              filename: (ctx, event) => event.filename,
+              processedFilename: (ctx, event) => event.processedFilename,
               isDir: (ctx, event) => event.filePaths.length > 1,
             }),
           ],
+        },
+        NO_FILES: {
+          target: 'idle',
         },
       },
     },
@@ -96,7 +105,7 @@ export default Machine({
           ],
         },
         ready: {
-          entry: [() => console.log('ready')],
+          entry: [(ctx) => console.log('ready', ctx.queue[0])],
           always: [
             {
               target: 'waiting',
@@ -111,8 +120,8 @@ export default Machine({
             FINISHED_PROCESSING: {
               target: 'end',
               actions: [
+                (ctx, event) => console.log('file', event.encodedFile),
                 assign((ctx, event) => (ctx.encodedFile += event.encodedFile)),
-                (ctx, event) => console.log('event', ctx, event),
               ],
             },
           },
@@ -132,6 +141,7 @@ export default Machine({
         },
         OPEN_FILE: {
           target: 'openingFiles',
+          actions: [assign({ encodedFile: '' })],
         },
       },
     },
@@ -142,14 +152,13 @@ export default Machine({
           var savePath = global.dialog.showSaveDialogSync({
             defaultPath:
               'C:\\Users\\fraserm\\Documents\\programming\\other\\nand2…s\\projects\\07\\MemoryAccess\\BasicTest\\' +
-              ctx.filename +
+              ctx.processedFilename +
               '.asm',
           });
           fs.writeFile(savePath, ctx.encodedFile, function (err) {
             // file saved or err
           });
 
-          console.log('file saved');
           callback({
             type: 'FILE_SAVED',
           });
@@ -158,6 +167,7 @@ export default Machine({
       on: {
         FILE_SAVED: {
           target: 'idle',
+          actions: [assign({ encodedFile: '' })],
         },
       },
     },
@@ -165,6 +175,5 @@ export default Machine({
 });
 
 function queueNotEmpty(ctx) {
-  console.log('not', ctx.queue.length > 0);
   return ctx.queue.length > 0;
 }

@@ -107,7 +107,6 @@ export default Machine({
           assign({
             encodedFile: (ctx) => {
               const assembledFileArr = [];
-              assembledFileArr.push(bootstrap());
               const setCurrentFunction = (functionName) => (ctx.currentFunction = functionName);
               ctx.cleanedFileArr.forEach((instruction) => {
                 assembledFileArr.push('// ' + instruction);
@@ -139,10 +138,7 @@ export default Machine({
     cleanup: {
       always: {
         target: 'idle',
-        actions: [
-          assign(() => initialContext),
-          sendParent((ctx) => ({ type: 'FINISHED_PROCESSING', encodedFile: ctx.encodedFile })),
-        ],
+        actions: [assign(() => initialContext)],
       },
     },
   },
