@@ -1,15 +1,19 @@
-import { createMachine, assign } from 'xstate';
+import { createMachine } from 'xstate';
 const fs = global.fs;
 
 export default createMachine({
   id: 'App',
-  initial: 'assembler',
+  initial: 'compiler',
   context: {},
   states: {
     assembler: {},
     vmTranslator: {},
+    compiler: {},
   },
   on: {
+    SWITCH_TAB_COMPILER: {
+      target: 'compiler',
+    },
     SWITCH_TAB_ASSEMBLER: {
       target: 'assembler',
     },

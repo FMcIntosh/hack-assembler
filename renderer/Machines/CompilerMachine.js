@@ -1,6 +1,6 @@
 import { assign, Machine, send } from 'xstate';
+import CompilerFileMachine from './CompilerFileMachine';
 import { bootstrap } from './translateVMInstruction';
-import VMFileMachine from './VMFileMachine';
 const fs = global.fs;
 const path = global.path;
 
@@ -18,7 +18,7 @@ export default Machine({
   },
   invoke: {
     id: 'fileTranslator',
-    src: VMFileMachine,
+    src: CompilerFileMachine,
   },
   states: {
     init: {
@@ -59,7 +59,8 @@ export default Machine({
           // dialog to open file
           const filePaths = global.dialog
             .showOpenDialogSync({ properties: ['openFile', 'multiSelections'] })
-            .filter((path) => path.endsWith('.vm'));
+            .filter((path) => path.endsWith('.jack'));
+          console.log('filepaths', filePaths);
           console.log(ctx.encodedFile);
           if (filePaths.length > 0) {
             callback({
