@@ -1,4 +1,5 @@
 import { assign, Machine, sendParent } from 'xstate';
+import Tokenizer from './Tokenizer';
 import { translateVMInstruction } from './translateVMInstruction';
 const fs = global.fs;
 const path = global.path;
@@ -87,7 +88,7 @@ export default Machine({
             ctx.rawFile.split('\n').forEach((line) => {
               const trimmed = line.trim().replace(/(\/\*[^*]*\*\/)|(\/\/[^*]*)/g, ''); // remove all comments
 
-              if (trimmed.substring(0, 2) === '//' || trimmed === '') {
+              if (trimmed.substring(0, 2) === '//' || trimmed === '' || trimmed.substring(0, 3) === '/**') {
                 // do nothing
                 // whitespace / comments
               } else {
@@ -106,6 +107,8 @@ export default Machine({
         actions: [
           assign({
             encodedFile: (ctx) => {
+              const tokenizer = new Tokenizer(ctx.cleanedFileArr);
+              console.log('tokens', tokenizer.tokenArr);
               const assembledFileArr = [];
               const setCurrentFunction = (functionName) => (ctx.currentFunction = functionName);
               ctx.cleanedFileArr.forEach((instruction) => {

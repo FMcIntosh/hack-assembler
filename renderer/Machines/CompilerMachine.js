@@ -61,7 +61,6 @@ export default Machine({
             .showOpenDialogSync({ properties: ['openFile', 'multiSelections'] })
             .filter((path) => path.endsWith('.jack'));
           console.log('filepaths', filePaths);
-          console.log(ctx.encodedFile);
           if (filePaths.length > 0) {
             callback({
               type: 'LOAD_FILE_PATHS',
@@ -106,7 +105,6 @@ export default Machine({
           ],
         },
         ready: {
-          entry: [(ctx) => console.log('ready', ctx.queue[0])],
           always: [
             {
               target: 'waiting',
@@ -120,10 +118,7 @@ export default Machine({
           on: {
             FINISHED_PROCESSING: {
               target: 'end',
-              actions: [
-                (ctx, event) => console.log('file', event.encodedFile),
-                assign((ctx, event) => (ctx.encodedFile += event.encodedFile)),
-              ],
+              actions: [assign((ctx, event) => (ctx.encodedFile += event.encodedFile))],
             },
           },
         },
