@@ -1,5 +1,6 @@
 import { assign, Machine, sendParent } from 'xstate';
 import Tokenizer from './Tokenizer';
+import JackAnalyzer from './JackAnalyzer';
 import { translateVMInstruction } from './translateVMInstruction';
 const fs = global.fs;
 const path = global.path;
@@ -108,12 +109,12 @@ export default Machine({
           assign({
             encodedFile: (ctx) => {
               const tokenizer = new Tokenizer(ctx.cleanedFileArr);
-              console.log('tokens', tokenizer.tokenArr);
+              const analyzer = new JackAnalyzer(tokenizer.tokenArr);
+
               const assembledFileArr = [];
               const setCurrentFunction = (functionName) => (ctx.currentFunction = functionName);
               ctx.cleanedFileArr.forEach((instruction) => {
                 assembledFileArr.push('// ' + instruction);
-
                 const translated = translateVMInstruction(
                   instruction,
                   ctx.filename,
@@ -124,8 +125,8 @@ export default Machine({
                 ctx.uniqueCount = ctx.uniqueCount + 1;
                 assembledFileArr.push(translated);
               });
-              let encodedFile = '';
-              assembledFileArr.forEach((line) => (encodedFile += line + '\n'));
+              let encodedFile = analyzer.compileClass();
+              console.log(encodedFile);
               return encodedFile;
             },
           }),
