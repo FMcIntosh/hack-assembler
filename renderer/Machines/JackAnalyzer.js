@@ -55,7 +55,7 @@ class JackAnalyzer {
   }
 
   compileClass() {
-    console.log('compileClass');
+    console.log('compileClass', this.currentToken.value, this.tokenArr);
     if (this.currentToken && this.currentToken.value === 'class') {
       this.compiled += '<class>\n';
       this.compiled += this.tokenToXML(this.currentToken);
@@ -129,13 +129,12 @@ class JackAnalyzer {
   }
 
   compileSubroutineBody() {
-    console.log('compileSubroutineBody');
+    console.log('compileSubroutineBody', this.currentToken.value);
     this.compiled += '<subroutineBody>\n';
     // {
     this.compiled += this.tokenToXML(this.currentToken);
     while (this.currentToken && this.currentToken.value !== '}') {
       this.nextToken();
-      console.log('next', this.currentToken.value);
       if (this.currentToken.value === 'var') {
         // class var dec
         this.compileVarDec();
@@ -147,6 +146,7 @@ class JackAnalyzer {
     this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
     this.compiled += '</subroutineBody>\n';
+    console.log('end compileSubroutineBody', this.currentToken.value);
   }
 
   compileVarDec() {
@@ -383,13 +383,14 @@ class JackAnalyzer {
     if (this.currentToken.value === '(') {
       // (
       this.compiled += this.tokenToXML(this.currentToken);
-
+      console.log('yozayoza');
       this.nextToken();
       this.compileExpression();
       // )
       this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
-    } else if (UNARY_OPS.includes(this.currentToken)) {
+    } else if (UNARY_OPS.includes(this.currentToken.value)) {
+      console.log('UNARY');
       this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
       this.compileTerm();
@@ -431,7 +432,7 @@ class JackAnalyzer {
         this.nextToken();
       }
     }
-    console.log('end', this.currentToken.value);
+    console.log('end compileTerm', this.currentToken.value);
     this.compiled += '</term>\n';
   }
 

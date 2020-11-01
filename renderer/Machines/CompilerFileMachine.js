@@ -89,7 +89,12 @@ export default Machine({
             ctx.rawFile.split('\n').forEach((line) => {
               const trimmed = line.trim().replace(/(\/\*[^*]*\*\/)|(\/\/[^*]*)/g, ''); // remove all comments
 
-              if (trimmed.substring(0, 2) === '//' || trimmed === '' || trimmed.substring(0, 3) === '/**') {
+              if (
+                trimmed.substring(0, 2) === '//' ||
+                trimmed === '' ||
+                trimmed.substring(0, 3) === '/**' ||
+                trimmed[0] === '*'
+              ) {
                 // do nothing
                 // whitespace / comments
               } else {
