@@ -131,7 +131,6 @@ export default Machine({
                 assembledFileArr.push(translated);
               });
               let encodedFile = analyzer.compileClass();
-              console.log(encodedFile);
               return encodedFile;
             },
           }),

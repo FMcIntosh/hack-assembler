@@ -1,4 +1,5 @@
 import { toInvokeSource } from 'xstate/lib/utils';
+import SymbolTable from './SymbolTable';
 
 const KEYWORDS = [
   'class',
@@ -42,6 +43,9 @@ class JackAnalyzer {
     this.tokenIndex = 0;
     this.compiled = '';
     this.currentToken = tokenArr[0];
+    this.symbolTable = new SymbolTable();
+    this.subroutineSymbolTable = {};
+    this.className = '';
   }
 
   nextToken() {
@@ -62,6 +66,7 @@ class JackAnalyzer {
       // Class name
       this.nextToken();
       this.compiled += this.tokenToXML(this.currentToken);
+      this.className = this.currentToken.value;
       // {
       this.nextToken();
       this.compiled += this.tokenToXML(this.currentToken);
@@ -75,6 +80,7 @@ class JackAnalyzer {
           this.compileSubroutineDec();
         }
       }
+      console.log('symbol', this.symbolTable.classSymbolTable, this.symbolTable.subroutineSymbolTable);
       // }
       this.compiled += this.tokenToXML(this.currentToken);
       this.compiled += '</class>\n';
@@ -84,12 +90,24 @@ class JackAnalyzer {
 
   compileClassVarDec() {
     console.log('compileClassVarDec');
-
+    //  static boolean test, another;
     this.compiled += '<classVarDec>\n';
-    this.compiled += this.tokenToXML(this.currentToken);
-    this.nextToken();
+
+    let kind, type;
     while (this.currentToken && this.currentToken.value !== ';') {
       this.compiled += this.tokenToXML(this.currentToken);
+      if (this.currentToken.value !== ',') {
+        if (!kind) {
+          kind = this.currentToken.value;
+        } else if (!type) {
+          type = this.currentToken.value;
+        } else {
+          let name = this.currentToken.value;
+
+          this.symbolTable.define({ name, kind, type });
+          name = undefined;
+        }
+      }
       this.nextToken();
     }
     // ;
@@ -100,8 +118,8 @@ class JackAnalyzer {
 
   compileSubroutineDec() {
     console.log('compileSubroutineDec', this.currentToken.value);
-
     this.compiled += '<subroutineDec>\n';
+    this.symbolTable.startSubroutine();
     this.compiled += this.tokenToXML(this.currentToken);
     while (this.currentToken && this.currentToken.value !== '(') {
       this.nextToken();
@@ -113,15 +131,27 @@ class JackAnalyzer {
     this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
     this.compileSubroutineBody();
-
+    console.log('subroutineSymbolTable', this.symbolTable.subroutineSymbolTable);
     this.compiled += '</subroutineDec>\n';
   }
 
   compileParameterList() {
     console.log('compileParameterList');
     this.compiled += '<parameterList>\n';
+    this.symbolTable.define({ name: 'this', type: this.className, kind: 'arg' });
+    let type;
     while (this.currentToken && this.currentToken.value !== ')') {
       this.compiled += this.tokenToXML(this.currentToken);
+      if (this.currentToken.value !== ',') {
+        if (!type) {
+          type = this.currentToken.value;
+        } else {
+          let name = this.currentToken.value;
+
+          this.symbolTable.define({ name, kind: 'arg', type });
+          name = undefined;
+        }
+      }
       this.nextToken();
     }
     //
@@ -133,8 +163,8 @@ class JackAnalyzer {
     this.compiled += '<subroutineBody>\n';
     // {
     this.compiled += this.tokenToXML(this.currentToken);
+    this.nextToken();
     while (this.currentToken && this.currentToken.value !== '}') {
-      this.nextToken();
       if (this.currentToken.value === 'var') {
         // class var dec
         this.compileVarDec();
@@ -150,13 +180,35 @@ class JackAnalyzer {
   }
 
   compileVarDec() {
-    console.log('compileVarDec');
+    console.log('compileVarDec', this.currentToken.value);
     this.compiled += '<varDec>\n';
-    this.compiled += this.tokenToXML(this.currentToken);
+    let kind, type;
     while (this.currentToken && this.currentToken.value !== ';') {
-      this.nextToken();
       this.compiled += this.tokenToXML(this.currentToken);
+      if (this.currentToken.value !== ',') {
+        console.log('yo', kind, type);
+        if (!kind) {
+          kind = this.currentToken.value;
+        } else if (!type) {
+          type = this.currentToken.value;
+        } else {
+          let name = this.currentToken.value;
+
+          this.symbolTable.define({ name, kind, type });
+          name = undefined;
+          kind = undefined;
+        }
+      }
+      this.nextToken();
+      console.log('next', this.currentToken.value);
     }
+    // ;
+    console.log('end', this.currentToken.value);
+
+    this.compiled += this.tokenToXML(this.currentToken);
+    this.nextToken();
+    console.log('end2', this.currentToken.value);
+
     this.compiled += '</varDec>\n';
   }
 
