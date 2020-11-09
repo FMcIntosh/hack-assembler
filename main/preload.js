@@ -6,8 +6,10 @@ const fs = require('fs');
 process.once('loaded', () => {
   const remote = require('electron').remote;
   const { dialog } = remote;
+  const { v4: uuidv4 } = require('uuid');
   global.ipcRenderer = ipcRenderer;
   global.dialog = dialog;
   global.fs = require('fs');
   global.path = require('path');
+  global.uuid = uuidv4;
 });

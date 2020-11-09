@@ -26,9 +26,21 @@ const KEYWORDS = [
 ];
 const OPS = ['+', '-', '*', '/', '&', '|', '<', '>', '='];
 const UNARY_OPS = ['-', '~'];
+const UNARY_OPS_TO_VM = { '-': 'neg', '~': 'not' };
 
 const SYMBOLS = ['{', '}', '(', ')', '[', ']', ',', '.', ';', '+', '-', '*', '/', '&', '|', '<', '>', '=', '~'];
 
+const OPS_TO_VM = {
+  '+': 'add',
+  '-': 'sub',
+  '*': 'call Math.multiply 2',
+  '/': 'call Math.divide 2',
+  '&': 'and',
+  '|': 'or',
+  '<': 'lt',
+  '>': 'gt',
+  '=': 'eq',
+};
 const typeToString = {
   KEYWORD: 'keyword',
   SYMBOL: 'symbol',
@@ -38,7 +50,7 @@ const typeToString = {
 };
 
 class JackAnalyzer {
-  constructor(tokenArr) {
+  constructor(tokenArr, fileName) {
     this.tokenArr = tokenArr;
     this.tokenIndex = 0;
     this.compiled = '';
@@ -46,6 +58,8 @@ class JackAnalyzer {
     this.symbolTable = new SymbolTable();
     this.subroutineSymbolTable = {};
     this.className = '';
+    this.codeStream = '';
+    this.fileName = fileName;
   }
 
   nextToken() {
@@ -56,6 +70,12 @@ class JackAnalyzer {
 
   currentToken() {
     return this.tokenArr[this.tokenIndex];
+  }
+
+  peek() {
+    if (this.tokenIndex < this.tokenArr.length - 1) {
+      return this.tokenArr[this.tokenIndex + 1];
+    }
   }
 
   compileClass() {
@@ -85,6 +105,8 @@ class JackAnalyzer {
       this.compiled += this.tokenToXML(this.currentToken);
       this.compiled += '</class>\n';
     }
+    console.log('codestrea\n', this.codeStream);
+
     return this.compiled;
   }
 
@@ -117,22 +139,29 @@ class JackAnalyzer {
   }
 
   compileSubroutineDec() {
+    // function / method / constructor
     console.log('compileSubroutineDec', this.currentToken.value);
-    this.compiled += '<subroutineDec>\n';
     this.symbolTable.startSubroutine();
-    this.compiled += this.tokenToXML(this.currentToken);
-    while (this.currentToken && this.currentToken.value !== '(') {
-      this.nextToken();
-      this.compiled += this.tokenToXML(this.currentToken);
-    }
+    // return type
+    this.nextToken();
+    const returnType = this.currentToken.value;
+
+    // name
+    this.nextToken();
+    const name = this.currentToken.value;
+    this.codeStream += 'function ' + this.fileName + '.' + name + ' 0\n';
+
+    // (
     this.nextToken();
     this.compileParameterList();
     // )
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
     this.compileSubroutineBody();
+    if (returnType === 'void') {
+      this.codeStream += 'push constant 0\n';
+    }
+    this.codeStream += 'return\n';
     console.log('subroutineSymbolTable', this.symbolTable.subroutineSymbolTable);
-    this.compiled += '</subroutineDec>\n';
   }
 
   compileParameterList() {
@@ -160,11 +189,12 @@ class JackAnalyzer {
 
   compileSubroutineBody() {
     console.log('compileSubroutineBody', this.currentToken.value);
-    this.compiled += '<subroutineBody>\n';
     // {
-    this.compiled += this.tokenToXML(this.currentToken);
+    console.log('jaja');
     this.nextToken();
+    console.log('hey');
     while (this.currentToken && this.currentToken.value !== '}') {
+      console.log('yoza');
       if (this.currentToken.value === 'var') {
         // class var dec
         this.compileVarDec();
@@ -194,7 +224,7 @@ class JackAnalyzer {
         } else {
           let name = this.currentToken.value;
 
-          this.symbolTable.define({ name, kind, type });
+          this.symbolTable.define({ name, kind: 'local', type });
           name = undefined;
           kind = undefined;
         }
@@ -248,63 +278,57 @@ class JackAnalyzer {
 
   compileLet() {
     console.log('compileLet', this.currentToken.value);
-    this.compiled += '<letStatement>\n';
     // let
-    this.compiled += this.tokenToXML(this.currentToken);
     // varname
     this.nextToken();
-    this.compiled += this.tokenToXML(this.currentToken);
+    const varName = this.currentToken.value;
 
     // check if it's an expression
     this.nextToken();
     if (this.currentToken.value === '[') {
       // [
-      this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
       this.compileExpression();
       // ]
-      this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
     }
     // =
-
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
 
     this.compileExpression();
     // ;
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
-    this.compiled += '</letStatement>\n';
+    const symbolObj = this.symbolTable.get(varName);
+    this.codeStream += 'pop ' + symbolObj.kind + ' ' + symbolObj.index + '\n';
     console.log('end compileLet', this.currentToken.value);
   }
 
   compileIf() {
     console.log('compileIf');
-    this.compiled += '<ifStatement>\n';
+    const statementOneId = 'L1-' + global.uuid();
+    const statementTwoId = 'L2-' + global.uuid();
     // if
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
     // (
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
 
     // expressions
     this.compileExpression();
 
     // )
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
 
     // {
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
+    this.codeStream += 'not\n';
+    this.writeIfGoto(statementOneId);
     this.compileStatements();
+    this.writeGoto(statementTwoId);
 
     // }
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
 
+    this.writeLabel(statementOneId);
     if (this.currentToken.value === 'else') {
       // else
       this.compiled += this.tokenToXML(this.currentToken);
@@ -318,80 +342,82 @@ class JackAnalyzer {
       this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
     }
+    this.writeLabel(statementTwoId);
+
     console.log('end if', this.currentToken.value);
     this.compiled += '</ifStatement>\n';
   }
 
   compileWhile() {
     console.log('compileWhile');
-    this.compiled += '<whileStatement>\n';
+    const statementOneId = 'L1-' + global.uuid();
+    const statementTwoId = 'L2-' + global.uuid();
+    this.writeLabel(statementOneId);
     // while
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
 
     // (
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
 
     // expressions
     this.compileExpression();
 
     // )
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
 
     // {
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
+    this.codeStream += 'not\n';
+    this.writeIfGoto(statementTwoId);
     this.compileStatements();
+    this.writeGoto(statementOneId);
 
     // }
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
-    this.compiled += '</whileStatement>\n';
+    this.writeLabel(statementTwoId);
     console.log('end while', this.currentToken.value);
   }
 
   compileDo() {
     console.log('compileDo');
-    this.compiled += '<doStatement>\n';
     // do
-    this.compiled += this.tokenToXML(this.currentToken);
-    this.nextToken();
 
     // varname
-    this.compiled += this.tokenToXML(this.currentToken);
+    this.nextToken();
+    let functionName = this.currentToken.value;
+
+    // ( or .
     this.nextToken();
 
     if (this.currentToken.value === '(') {
       // (
-      this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
-      this.compileExpressionList();
+      const expressionCount = this.compileExpressionList();
+      this.writeCall(functionName, expressionCount);
+
       // )
-      this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
     } else if (this.currentToken.value === '.') {
       // .
-      this.compiled += this.tokenToXML(this.currentToken);
-      this.nextToken();
+
       // subroutine name
-      this.compiled += this.tokenToXML(this.currentToken);
+      this.nextToken();
+      console.log('COMPILE DO ', this.currentToken.value);
+      functionName += '.' + this.currentToken.value;
+
       this.nextToken();
       // (
-      this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
-      this.compileExpressionList();
+      const expressionCount = this.compileExpressionList();
+      this.writeCall(functionName, expressionCount);
       // )
-      this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
     }
 
     // ;
-    this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
 
-    this.compiled += '</doStatement>\n';
+    this.codeStream += 'pop temp 0\n';
     console.log('end compileDo', this.currentToken.value);
   }
 
@@ -420,9 +446,11 @@ class JackAnalyzer {
     while (OPS.includes(this.currentToken.value)) {
       // op
       this.compiled += this.tokenToXML(this.currentToken);
+      let opToken = this.currentToken;
       this.nextToken();
       console.log('current token ', this.currentToken.value, OPS.includes(this.currentToken.value));
       this.compileTerm();
+      this.compileOp(opToken);
     }
     console.log('end compileExpression', this.currentToken.value);
     this.compiled += '</expression>\n';
@@ -430,78 +458,122 @@ class JackAnalyzer {
 
   compileTerm() {
     console.log('compileTerm', this.currentToken.value);
-    this.compiled += '<term>\n';
+    const prevToken = this.currentToken;
     // var, const, string etc
     if (this.currentToken.value === '(') {
       // (
-      this.compiled += this.tokenToXML(this.currentToken);
-      console.log('yozayoza');
       this.nextToken();
       this.compileExpression();
       // )
-      this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
     } else if (UNARY_OPS.includes(this.currentToken.value)) {
-      console.log('UNARY');
-      this.compiled += this.tokenToXML(this.currentToken);
       this.nextToken();
       this.compileTerm();
+      this.compileOp(prevToken, true);
     } else {
-      console.log('start');
-      this.compiled += this.tokenToXML(this.currentToken);
+      const nextToken = this.peek();
+
       // check if it's an expression
-      this.nextToken();
-      if (this.currentToken.value === '[') {
+
+      if (nextToken.value === '[') {
+        this.nextToken();
         // [
-        this.compiled += this.tokenToXML(this.currentToken);
         this.nextToken();
         this.compileExpression();
         // ]
-        this.compiled += this.tokenToXML(this.currentToken);
         this.nextToken();
-      } else if (this.currentToken.value === '(') {
+      } else if (nextToken.value === '(') {
+        this.nextToken();
         // (
-        this.compiled += this.tokenToXML(this.currentToken);
         this.nextToken();
-        this.compileExpressionList();
+        const expressionCount = this.compileExpressionList();
+        this.writeCall(prevToken.value, expressionCount);
         // )
-        this.compiled += this.tokenToXML(this.currentToken);
         this.nextToken();
-      } else if (this.currentToken.value === '.') {
+      } else if (nextToken.value === '.') {
+        this.nextToken();
         console.log('dot');
         // .
-        this.compiled += this.tokenToXML(this.currentToken);
         this.nextToken();
         // subroutine name
-        this.compiled += this.tokenToXML(this.currentToken);
-        this.nextToken();
+        const funcName = prevToken.value + '.' + this.currentToken.value;
         // (
-        this.compiled += this.tokenToXML(this.currentToken);
         this.nextToken();
-        this.compileExpressionList();
+        // expression
+        this.nextToken();
+        const expressionCount = this.compileExpressionList();
+        this.writeCall(funcName, expressionCount);
         // )
-        this.compiled += this.tokenToXML(this.currentToken);
+        this.nextToken();
+      } else {
+        console.log('current token type', this.currentToken.type);
+        if (this.currentToken.type === 'INT_CONST') {
+          this.writePushConst(this.currentToken.value);
+        }
+        console.log('WHOAH', this.currentToken);
+        if (this.currentToken.type === 'IDENTIFIER') {
+          this.writePushVar(this.currentToken.value);
+        }
         this.nextToken();
       }
     }
     console.log('end compileTerm', this.currentToken.value);
-    this.compiled += '</term>\n';
+  }
+
+  compileOp(token, unary = false) {
+    console.log('COMPILING OP', token.value);
+    this.codeStream += unary ? UNARY_OPS_TO_VM[token.value] : OPS_TO_VM[token.value];
+    this.codeStream += '\n';
+  }
+
+  writeFunction(name, args) {
+    this.codeStream += 'call ' + name + ' ' + args + '\n';
+  }
+
+  writePushConst(val) {
+    console.log('WRITING CONST');
+    this.codeStream += 'push constant ' + val + '\n';
+  }
+
+  writePushVar(varName) {
+    const symbolObj = this.symbolTable.get(varName);
+    this.codeStream += 'push ' + symbolObj.kind + ' ' + symbolObj.index + '\n';
+  }
+
+  writeCall(functionName, expressionCount) {
+    this.codeStream += 'call ' + functionName + ' ' + expressionCount + '\n';
+  }
+
+  writeLabel(label) {
+    this.codeStream += 'label ' + label + '\n';
+  }
+
+  writeIfGoto(label) {
+    this.codeStream += 'if-goto ' + label + '\n';
+  }
+
+  writeGoto(label) {
+    this.codeStream += 'goto ' + label + '\n';
   }
 
   compileExpressionList() {
     console.log('compileExpressionList');
     this.compiled += '<expressionList>\n';
+    let expressionCount = 0;
     if (this.currentToken.value !== ')') {
       this.compileExpression();
+      expressionCount++;
       while (this.currentToken.value === ',') {
         // ,
         this.compiled += this.tokenToXML(this.currentToken);
         this.nextToken();
         this.compileExpression();
+        expressionCount++;
       }
       console.log('end compileExpressionList', this.currentToken.value);
     }
     this.compiled += '</expressionList>\n';
+    return expressionCount;
   }
 
   hasMoreTokens() {

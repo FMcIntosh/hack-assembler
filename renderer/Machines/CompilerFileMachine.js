@@ -114,7 +114,7 @@ export default Machine({
           assign({
             encodedFile: (ctx) => {
               const tokenizer = new Tokenizer(ctx.cleanedFileArr);
-              const analyzer = new JackAnalyzer(tokenizer.tokenArr);
+              const analyzer = new JackAnalyzer(tokenizer.tokenArr, ctx.filename);
 
               const assembledFileArr = [];
               const setCurrentFunction = (functionName) => (ctx.currentFunction = functionName);
