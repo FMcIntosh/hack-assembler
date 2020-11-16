@@ -18,7 +18,7 @@ class SymbolTable {
 
   define({ name, type, kind }) {
     const index = this.varCount(kind);
-    console.log('DEFINE', kind);
+    console.log('DEFINE', { name, type, kind });
     if (kind === 'static' || kind === 'field') {
       this.classSymbolTable[name] = { name, type, kind, index };
     } else {
