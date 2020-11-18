@@ -299,13 +299,16 @@ class JackAnalyzer {
     // varname
     this.nextToken();
     const varName = this.currentToken.value;
-
+    let arrayAccess = false;
     // check if it's an expression
     this.nextToken();
     if (this.currentToken.value === '[') {
+      arrayAccess = true;
       // [
       this.nextToken();
-      this.compileExpression();
+      this.compileExpression(arrayAccess);
+      this.writePushVar(varName);
+      this.compileOp({ value: '+' });
       // ]
       this.nextToken();
     }
@@ -315,7 +318,7 @@ class JackAnalyzer {
     this.compileExpression();
     // ;
     this.nextToken();
-    this.writePopVar(varName);
+    this.writePopVar(varName, arrayAccess);
 
     console.log('end compileLet', this.currentToken.value);
   }
@@ -460,7 +463,6 @@ class JackAnalyzer {
 
   compileReturn() {
     console.log('compileReturn');
-    this.compiled += '<returnStatement>\n';
     // return
     this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
@@ -472,28 +474,25 @@ class JackAnalyzer {
     // ;
     this.compiled += this.tokenToXML(this.currentToken);
     this.nextToken();
-    this.compiled += '</returnStatement>\n';
     console.log('end compileDo', this.currentToken.value);
   }
 
-  compileExpression() {
+  compileExpression(isArrayAssignment) {
     console.log('compileExpression', this.currentToken.value);
-    this.compiled += '<expression>\n';
-    this.compileTerm();
+    this.compileTerm(isArrayAssignment);
     while (OPS.includes(this.currentToken.value)) {
       // op
       this.compiled += this.tokenToXML(this.currentToken);
       let opToken = this.currentToken;
       this.nextToken();
       console.log('current token ', this.currentToken.value, OPS.includes(this.currentToken.value));
-      this.compileTerm();
+      this.compileTerm(isArrayAssignment);
       this.compileOp(opToken);
     }
     console.log('end compileExpression', this.currentToken.value);
-    this.compiled += '</expression>\n';
   }
 
-  compileTerm() {
+  compileTerm(isArrayAssignment) {
     console.log('compileTerm', this.currentToken.value);
     const prevToken = this.currentToken;
     // var, const, string etc
@@ -517,8 +516,16 @@ class JackAnalyzer {
         // [
         this.nextToken();
         this.compileExpression();
+        this.writePushVar(prevToken.value);
+
         // ]
         this.nextToken();
+
+        this.compileOp({ value: '+' });
+        if (!isArrayAssignment) {
+          this.writePopPointer(1);
+          this.writeSegment('push', 'that', 0);
+        }
       } else if (nextToken.value === '(') {
         this.nextToken();
         // (
@@ -570,6 +577,10 @@ class JackAnalyzer {
         console.log('WHOAH', this.currentToken);
         if (this.currentToken.type === 'IDENTIFIER') {
           this.writePushVar(this.currentToken.value);
+        }
+
+        if (this.currentToken.type === 'STRING_CONST') {
+          this.writeStringConst(this.currentToken.value);
         }
         this.nextToken();
       }
@@ -624,9 +635,29 @@ class JackAnalyzer {
     this.codeStream += 'push ' + this.kindToSegment(symbolObj.kind) + ' ' + symbolObj.index + '\n';
   }
 
-  writePopVar(varName) {
+  writeStringConst(stringConst) {
+    this.writePushConst(stringConst.split('').length);
+    this.writeCall('String.new', 1);
+    stringConst.split('').forEach((char) => {
+      this.writePushConst(char.charCodeAt(0));
+      this.writeCall('String.appendChar', 2);
+    });
+  }
+
+  writePopVar(varName, arrayAccess) {
     const symbolObj = this.symbolTable.get(varName);
-    this.codeStream += 'pop ' + this.kindToSegment(symbolObj.kind) + ' ' + symbolObj.index + '\n';
+    if (symbolObj.type === 'Array' && arrayAccess) {
+      this.writeSegment('pop', 'temp', 0);
+      this.writePopPointer(1);
+      this.writeSegment('push', 'temp', 0);
+      this.writeSegment('pop', 'that', 0);
+    } else {
+      this.codeStream += 'pop ' + this.kindToSegment(symbolObj.kind) + ' ' + symbolObj.index + '\n';
+    }
+  }
+
+  writeSegment(command, segment, i) {
+    this.codeStream += command + ' ' + segment + ' ' + i + '\n';
   }
 
   writePushKeyword(keyword) {
